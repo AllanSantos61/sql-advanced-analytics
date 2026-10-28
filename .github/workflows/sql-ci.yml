@@ -1,0 +1,36 @@
+name: PostgreSQL SQL checks
+on:
+  push:
+  pull_request:
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: portfolio
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      PGHOST: localhost
+      PGPORT: '5432'
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      PGDATABASE: portfolio
+    steps:
+      - uses: actions/checkout@v4
+      - name: Create schema and synthetic data
+        run: |
+          psql -v ON_ERROR_STOP=1 -f sql/01_schema.sql
+          psql -v ON_ERROR_STOP=1 -f sql/02_seed.sql
+      - name: Execute analytical queries
+        run: |
+          for f in sql/0{3,4,5,6,7,8}_*.sql; do psql -v ON_ERROR_STOP=1 -f "$f" >/dev/null; done
+      - name: Assert data quality and financial consistency
+        run: psql -v ON_ERROR_STOP=1 -f tests/assertions.sql
